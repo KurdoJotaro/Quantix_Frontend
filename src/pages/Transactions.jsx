@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api, { getApiError } from '../services/api';
 import { formatTransactionAmount, getLocalDate, isIncome } from '../services/transactions';
 import { Plus, Trash, Edit2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import Modal from '../components/Modal';
 
 const Transactions = () => {
@@ -13,6 +14,7 @@ const Transactions = () => {
     // Modal & Form State
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [categories, setCategories] = useState([]);
+    const [categoriesLoading, setCategoriesLoading] = useState(true);
     const [formData, setFormData] = useState({
         amount: '',
         description: '',
@@ -22,6 +24,7 @@ const Transactions = () => {
     const [editingId, setEditingId] = useState(null);
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState('');
+    const canCreateTransaction = !categoriesLoading && !categoryError && categories.length > 0;
 
     useEffect(() => {
         fetchTransactions();
@@ -43,13 +46,19 @@ const Transactions = () => {
     };
 
     const fetchCategories = async () => {
+        setCategoriesLoading(true);
+        setCategoryError('');
         try {
             const response = await api.get('/categories');
             if (response.data.success) {
                 setCategories(response.data.data);
+            } else {
+                setCategoryError(response.data.message || 'Failed to fetch categories.');
             }
         } catch (err) {
             setCategoryError(getApiError(err, 'Failed to fetch categories.'));
+        } finally {
+            setCategoriesLoading(false);
         }
     };
 
@@ -82,7 +91,7 @@ const Transactions = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (saving) return;
+        if (saving || !canCreateTransaction) return;
         setSaving(true);
         setFormError('');
         const payload = {
@@ -117,6 +126,23 @@ const Transactions = () => {
 
     if (loading) return <div>Loading...</div>;
 
+    const categoryNotice = categoryError ? (
+        <div role="alert" className="mb-4">
+            <p className="text-error mb-2">{categoryError}</p>
+            <div className="flex gap-3">
+                <button type="button" onClick={fetchCategories} className="btn btn-secondary">Try Again</button>
+                <Link to="/categories" className="btn btn-primary">Manage Categories</Link>
+            </div>
+        </div>
+    ) : categoriesLoading ? (
+        <p role="status" className="text-secondary mb-4">Loading categories...</p>
+    ) : categories.length === 0 ? (
+        <div className="card mb-4">
+            <p className="text-secondary mb-4">Create a category before adding a transaction.</p>
+            <Link to="/categories" className="btn btn-primary"><Plus size={18} /> Create Category</Link>
+        </div>
+    ) : null;
+
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
@@ -127,7 +153,7 @@ const Transactions = () => {
             </div>
 
             {error && <div className="text-error mb-4 bg-red-500/10 p-2 rounded">{error}</div>}
-            {categoryError && <div role="alert" className="text-error mb-4">{categoryError}</div>}
+            {!isModalOpen && categoryNotice}
 
             <div className="card overflow-x-auto">
                 <table className="w-full text-left border-collapse">
@@ -173,12 +199,14 @@ const Transactions = () => {
             >
                 <form onSubmit={handleSubmit}>
                     {formError && <div role="alert" className="text-error mb-4">{formError}</div>}
+                    {categoryNotice}
                     <div className="form-group">
                         <label className="form-label">Category</label>
                         <select
                             className="form-input"
                             value={formData.categoryId}
                             onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                            disabled={!canCreateTransaction}
                             required
                         >
                             <option value="">Select Category</option>
@@ -228,7 +256,7 @@ const Transactions = () => {
 
                     <div className="flex gap-3 justify-end mt-6">
                         <button type="button" onClick={handleCloseModal} className="btn btn-secondary">Cancel</button>
-                        <button type="submit" disabled={saving} className="btn btn-primary">
+                        <button type="submit" disabled={saving || !canCreateTransaction} className="btn btn-primary">
                             {saving ? 'Saving...' : editingId ? 'Update' : 'Create'}
                         </button>
                     </div>

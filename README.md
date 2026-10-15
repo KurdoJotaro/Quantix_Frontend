@@ -8,7 +8,7 @@ Quantix API için React 19 ve Vite 6 ile geliştirilmiş kişisel finans takip a
 - **Kimlik Doğrulama:** Kayıt, giriş, e-posta doğrulama ve JWT oturum yönetimi.
 - **Dashboard:** İşlemlerden hesaplanan bakiye, gelir/gider özeti ve son işlemler.
 - **İşlem Yönetimi:** Gelir ve gider ekleme, düzenleme, silme.
-- **Kategori Yönetimi:** Admin paneli üzerinden dinamik kategori yönetimi.
+- **Kategori Yönetimi:** Her kullanıcı kendi gelir/gider kategorilerini oluşturur ve kullanılmayan kendi kategorilerini silebilir. Önceden var olan ortak kategoriler de listelenir.
 - **Admin Panel:** Kullanıcıları görüntüleme ve yasaklama (Ban/Unban) özellikleri.
 
 ## Teknolojiler 
@@ -59,6 +59,9 @@ Derleme çıktısı `dist/` klasörüne yazılır. `preview` varsayılan olarak 
 - Tutar API'ye pozitif sayı olarak gönderilir. Gelir/gider ayrımı `categoryType` alanından gelir: `0` gelir, `1` gider.
 - Dashboard özeti tutar işaretinden veya kategori isminden tahmin edilmez; kategori türüne göre hesaplanır.
 - Tarih formu yerel günü kullanır. Opsiyonel doğum tarihi seçilmezse API'ye `null` gönderilir.
+- Kategori oluşturmak için admin rolü gerekmez. Yeni kategori oturumdaki kullanıcıya aittir; istemci sahip kimliği göndermez.
+- Kategori listesindeki `canManage` silme düğmesinin görünürlüğünü, `isShared` önceden var olan ortak kategorileri belirler. Sahiplik ve silme yetkisini backend denetler; geçmiş işlemlerde kullanılan kategori silinemez.
+- İşlem formu kategori listesi yüklenmeden, yükleme başarısızsa veya liste boşsa gönderilemez. Boş listeden kategori oluşturma sayfasına gidilebilir; yükleme hatası tekrar denenebilir.
 - Admin bağlantılarının gizlenmesi arayüz davranışıdır; gerçek yetki denetimini backend yapar.
 - JWT tarayıcının `localStorage` alanında tutulur. Bu portföy projesinde HttpOnly çerez veya token yenileme akışı bulunmaz.
 - Grafik, bütçe limiti, filtreleme ve sayfalama uygulanmamıştır.
