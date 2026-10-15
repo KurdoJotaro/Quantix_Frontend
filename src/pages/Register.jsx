@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
+import { getApiError } from '../services/api';
 
 const Register = () => {
     const [formData, setFormData] = useState({
@@ -13,8 +14,8 @@ const Register = () => {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     const { register } = useAuth();
-    const navigate = useNavigate();
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -22,6 +23,8 @@ const Register = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (submitting || success) return;
+        setSubmitting(true);
         setError('');
         setSuccess('');
 
@@ -29,18 +32,13 @@ const Register = () => {
             const response = await register(formData);
             if (response.success) {
                 setSuccess('Registration successful! Please check your email to verify your account.');
-                setTimeout(() => navigate('/login'), 3000); // Redirect after 3s
             } else {
                 setError(response.message || 'Registration failed.');
             }
         } catch (err) {
-            // Axios error handling
-            const apiError = err.response?.data;
-            if (apiError?.errors && Array.isArray(apiError.errors)) {
-                setError(apiError.errors.join(', '));
-            } else {
-                setError(apiError?.message || 'Registration failed. Please try again.');
-            }
+            setError(getApiError(err, 'Registration failed. Please try again.'));
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -50,8 +48,8 @@ const Register = () => {
                 <h2 className="text-2xl font-bold text-center mb-2">Create Account</h2>
                 <p className="text-center text-secondary mb-6">Join Quantix to track your finances</p>
 
-                {error && <div className="text-error mb-4 bg-red-500/10 p-3 rounded text-sm">{error}</div>}
-                {success && <div className="text-success mb-4 bg-green-500/10 p-3 rounded text-sm">{success}</div>}
+                {error && <div role="alert" className="text-error mb-4 bg-red-500/10 p-3 rounded text-sm">{error}</div>}
+                {success && <div role="status" className="text-success mb-4 bg-green-500/10 p-3 rounded text-sm">{success}</div>}
 
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
@@ -62,6 +60,7 @@ const Register = () => {
                             className="form-input"
                             value={formData.fullName}
                             onChange={handleChange}
+                            maxLength={100}
                             required
                         />
                     </div>
@@ -92,6 +91,7 @@ const Register = () => {
                             />
                             <button
                                 type="button"
+                                aria-label={showPassword ? 'Hide password' : 'Show password'}
                                 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-secondary hover:text-primary transition-colors"
                                 onClick={() => setShowPassword(!showPassword)}
                             >
@@ -112,8 +112,8 @@ const Register = () => {
                         />
                     </div>
 
-                    <button type="submit" className="w-full btn btn-primary mt-4">
-                        Sign Up
+                    <button type="submit" disabled={submitting || !!success} className="w-full btn btn-primary mt-4">
+                        {submitting ? 'Creating account...' : 'Sign Up'}
                     </button>
                 </form>
 

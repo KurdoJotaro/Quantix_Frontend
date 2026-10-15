@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import api from '../services/api';
+import api, { getApiError } from '../services/api';
 
 const Admin = () => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [updatingId, setUpdatingId] = useState(null);
 
     useEffect(() => {
         fetchUsers();
@@ -16,23 +18,28 @@ const Admin = () => {
                 setUsers(response.data.data);
             }
         } catch (err) {
-            console.error(err);
+            setError(getApiError(err, 'Failed to fetch users.'));
         } finally {
             setLoading(false);
         }
     };
 
     const toggleBan = async (id) => {
+        if (updatingId) return;
+        setUpdatingId(id);
+        setError('');
         try {
             await api.put(`/users/${id}/ban`);
-            setUsers(users.map(u => {
+            setUsers((current) => current.map(u => {
                 if (u.id === id) {
                     return { ...u, isBanned: !u.isBanned };
                 }
                 return u;
             }));
         } catch (err) {
-            alert('Failed to update user status.');
+            setError(getApiError(err, 'Failed to update user status.'));
+        } finally {
+            setUpdatingId(null);
         }
     };
 
@@ -41,6 +48,7 @@ const Admin = () => {
     return (
         <div>
             <h1 className="text-2xl font-bold mb-6">User Management</h1>
+            {error && <div role="alert" className="text-error mb-4">{error}</div>}
             <div className="card overflow-x-auto">
                 <table className="w-full text-left">
                     <thead>
@@ -64,6 +72,7 @@ const Admin = () => {
                                 <td className="p-3">
                                     <button
                                         onClick={() => toggleBan(user.id)}
+                                        disabled={!!updatingId}
                                         className={`btn btn-sm ${user.isBanned ? 'btn-secondary' : 'btn-danger'} text-xs`}
                                     >
                                         {user.isBanned ? 'Unban' : 'Ban'}

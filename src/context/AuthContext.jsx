@@ -16,13 +16,15 @@ export const AuthProvider = ({ children }) => {
             const decoded = jwtDecode(token);
             // Check if token is expired
             const now = Date.now() / 1000;
-            if (decoded.exp < now) return null;
+            if (!Number.isFinite(decoded.exp) || decoded.exp <= now) return null;
+
+            const roleClaim = decoded.role || decoded['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
 
             return {
                 id: decoded.nameid || decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'],
                 email: decoded.email || decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'],
                 name: decoded.unique_name || decoded.name || decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'],
-                role: decoded.role || decoded['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'],
+                roles: Array.isArray(roleClaim) ? roleClaim : [roleClaim],
                 token
             };
         } catch (error) {
@@ -49,9 +51,10 @@ export const AuthProvider = ({ children }) => {
         const response = await api.post('/auth/login', { email, password });
         if (response.data.success) {
             const { accessToken } = response.data.data;
-            localStorage.setItem('quantix_token', accessToken);
-
             const userData = getUserFromToken(accessToken);
+            if (!userData) return false;
+
+            localStorage.setItem('quantix_token', accessToken);
             setUser(userData);
             return true;
         }
@@ -59,7 +62,10 @@ export const AuthProvider = ({ children }) => {
     };
 
     const register = async (userData) => {
-        const response = await api.post('/auth/register', userData);
+        const response = await api.post('/auth/register', {
+            ...userData,
+            birthDate: userData.birthDate || null,
+        });
         return response.data;
     };
 
@@ -76,7 +82,7 @@ export const AuthProvider = ({ children }) => {
         register,
         logout,
         isAuthenticated: !!user,
-        isAdmin: user?.role === 'Admin',
+        isAdmin: user?.roles.includes('Admin') ?? false,
     };
 
     return (

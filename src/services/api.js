@@ -10,7 +10,7 @@ const api = axios.create({
 api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('quantix_token');
-        if (token) {
+        if (token && !config.url?.startsWith('/auth/')) {
             config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
@@ -23,13 +23,22 @@ api.interceptors.request.use(
 api.interceptors.response.use(
     (response) => response,
     (error) => {
-        // Check if error is 401 and try to handle token expiration
-        if (error.response?.status === 401) {
+        if (error.response?.status === 401 && error.config?.headers?.Authorization) {
             localStorage.removeItem('quantix_token');
             window.location.href = '/login';
         }
         return Promise.reject(error);
     }
 );
+
+export const getApiError = (error, fallback = 'Operation failed. Please try again.') => {
+    const response = error.response?.data;
+    const errors = response?.errors;
+    if (errors) {
+        const messages = Array.isArray(errors) ? errors : Object.values(errors).flat();
+        if (messages.length > 0) return messages.join(' ');
+    }
+    return response?.message || response?.title || fallback;
+};
 
 export default api;

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import api from '../services/api';
+import api, { getApiError } from '../services/api';
 import { Trash, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
@@ -7,8 +7,9 @@ import Modal from '../components/Modal';
 const Categories = () => {
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
-    const { user } = useAuth();
-    const isAdmin = user?.role === 'Admin';
+    const { isAdmin } = useAuth();
+    const [error, setError] = useState('');
+    const [saving, setSaving] = useState(false);
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -29,7 +30,7 @@ const Categories = () => {
                 setCategories(response.data.data);
             }
         } catch (err) {
-            console.error(err);
+            setError(getApiError(err, 'Failed to fetch categories.'));
         } finally {
             setLoading(false);
         }
@@ -39,26 +40,31 @@ const Categories = () => {
         if (!window.confirm('Delete this category?')) return;
         try {
             await api.delete(`/categories/${id}`);
-            setCategories(categories.filter(c => c.id !== id));
+            setCategories((current) => current.filter(category => category.id !== id));
         } catch (err) {
-            alert('Failed to delete category. It might be in use.');
+            setError(getApiError(err, 'Failed to delete category. It might be in use.'));
         }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (saving) return;
+        setSaving(true);
+        setError('');
         try {
             const response = await api.post('/categories', {
                 ...formData,
                 type: parseInt(formData.type)
             });
             if (response.data.success) {
-                setCategories([...categories, response.data.data]);
+                setCategories((current) => [...current, response.data.data]);
                 setIsModalOpen(false);
                 setFormData({ name: '', type: 1, iconCode: '' });
             }
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to create category');
+            setError(getApiError(err, 'Failed to create category.'));
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -69,11 +75,13 @@ const Categories = () => {
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold">Categories</h1>
                 {isAdmin && (
-                    <button onClick={() => setIsModalOpen(true)} className="btn btn-primary">
+                    <button onClick={() => { setError(''); setIsModalOpen(true); }} className="btn btn-primary">
                         <Plus size={18} /> New Category
                     </button>
                 )}
             </div>
+
+            {error && <div role="alert" className="text-error mb-4">{error}</div>}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {categories.map((cat) => (
@@ -88,7 +96,7 @@ const Categories = () => {
                             </div>
                         </div>
                         {isAdmin && (
-                            <button onClick={() => handleDelete(cat.id)} className="text-secondary hover:text-danger p-2">
+                            <button onClick={() => handleDelete(cat.id)} aria-label={`Delete ${cat.name}`} className="text-secondary hover:text-danger p-2">
                                 <Trash size={18} />
                             </button>
                         )}
@@ -102,6 +110,7 @@ const Categories = () => {
                 title="Add New Category"
             >
                 <form onSubmit={handleSubmit}>
+                    {error && <div role="alert" className="text-error mb-4">{error}</div>}
                     <div className="form-group">
                         <label className="form-label">Category Name</label>
                         <input
@@ -110,7 +119,7 @@ const Categories = () => {
                             value={formData.name}
                             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                             required
-                            maxLength={50}
+                            maxLength={100}
                         />
                     </div>
 
@@ -128,7 +137,7 @@ const Categories = () => {
 
                     <div className="flex gap-3 justify-end mt-6">
                         <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-secondary">Cancel</button>
-                        <button type="submit" className="btn btn-primary">Create</button>
+                        <button type="submit" disabled={saving} className="btn btn-primary">{saving ? 'Saving...' : 'Create'}</button>
                     </div>
                 </form>
             </Modal>

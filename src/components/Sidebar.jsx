@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 const Sidebar = () => {
-    const { user, logout } = useAuth();
+    const { user, logout, isAdmin } = useAuth();
 
     const navItems = [
         { name: 'Dashboard', path: '/dashboard', icon: <LayoutDashboard size={20} /> },
@@ -18,12 +18,12 @@ const Sidebar = () => {
         { name: 'Categories', path: '/categories', icon: <Tags size={20} /> },
     ];
 
-    if (user?.role === 'Admin') {
+    if (isAdmin) {
         navItems.push({ name: 'Admin Panel', path: '/admin', icon: <Users size={20} /> });
     }
 
     return (
-        <div className="h-screen w-64 bg-slate-900 border-r border-slate-700 flex flex-col fixed left-0 top-0">
+        <aside className="sidebar h-screen w-64 bg-slate-900 border-r border-slate-700 flex flex-col fixed left-0 top-0">
             <div className="p-6 border-b border-slate-700">
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
                     Quantix
@@ -66,7 +66,7 @@ const Sidebar = () => {
                     Logout
                 </button>
             </div>
-        </div>
+        </aside>
     );
 };
 

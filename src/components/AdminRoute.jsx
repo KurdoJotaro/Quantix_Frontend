@@ -3,9 +3,9 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const AdminRoute = () => {
-    const { user, loading } = useAuth();
+    const { isAdmin, loading } = useAuth();
     if (loading) return <div>Loading...</div>;
-    return user && user.role === 'Admin' ? <Outlet /> : <Navigate to="/dashboard" />;
+    return isAdmin ? <Outlet /> : <Navigate to="/dashboard" replace />;
 };
 
 export default AdminRoute;

@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
-import api from '../services/api';
+import api, { getApiError } from '../services/api';
+import { calculateTransactionStats, formatTransactionAmount, isIncome } from '../services/transactions';
 import { TrendingUp, TrendingDown, Wallet } from 'lucide-react';
 
 const Dashboard = () => {
-    const { user, logout } = useAuth();
+    const { user } = useAuth();
     const [transactions, setTransactions] = useState([]);
     const [stats, setStats] = useState({
         income: 0,
@@ -13,6 +14,7 @@ const Dashboard = () => {
         balance: 0
     });
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
 
     useEffect(() => {
         const fetchData = async () => {
@@ -21,10 +23,10 @@ const Dashboard = () => {
                 if (response.data.success) {
                     const trans = response.data.data;
                     setTransactions(trans);
-                    calculateStats(trans);
+                    setStats(calculateTransactionStats(trans));
                 }
             } catch (err) {
-                console.error("Failed to fetch dashboard data");
+                setError(getApiError(err, 'Failed to fetch dashboard data.'));
             } finally {
                 setLoading(false);
             }
@@ -33,49 +35,8 @@ const Dashboard = () => {
         fetchData();
     }, []);
 
-    const calculateStats = (trans) => {
-        let income = 0;
-        let expense = 0;
-
-        trans.forEach(t => {
-            // Logic: If categoryType is Income (0) OR amount > 0 -> Income
-            // But strictly following API: amount is signed. 
-            // If amount > 0 it's likely income, if < 0 expense.
-            // However, usually expense transactions come as positive numbers in DB but logic treats them as expense. 
-            // Let's assume Category Type is strict. 
-            // Based on typical finance apps:
-            // If user selected Income category -> Add to Income
-            // If user selected Expense category -> Add to Expense
-            // The API returns categoryName but not type directly in TransactionDto (check docs).
-            // Docs say: TransactionDto has categoryId and categoryName.
-            // We might need to rely on amount sign if the backend handles it, OR fetch categories to map types.
-            // Let's assume for now: Positive amount = Income, Negative or handled by UI coloring = Expense.
-            // Actually, in the Transactions page we did: t.categoryName === 'Income' || t.amount > 0 ? '+' : '-'
-            // Let's stick to that simple logic for now.
-
-            const val = parseFloat(t.amount);
-            if (val > 0) {
-                income += val;
-            } else {
-                expense += Math.abs(val);
-            }
-
-            // Better way if we had category type:
-            // But we don't have it in TransactionDto. 
-            // Alternative: Fetch categories and create a map. 
-            // For MVP, enable simple sign-based logic. 
-            // If user enters positive amount for Expense, we should probably handle it.
-            // But let's assume valid data.
-        });
-
-        setStats({
-            income,
-            expense,
-            balance: income - expense
-        });
-    };
-
     if (loading) return <div className="p-8 text-center text-secondary">Loading dashboard...</div>;
+    if (error) return <div role="alert" className="text-error">{error}</div>;
 
     return (
         <div>
@@ -143,8 +104,8 @@ const Dashboard = () => {
                                                 <span className="text-xs text-secondary">{t.categoryName}</span>
                                             </div>
                                         </td>
-                                        <td className={`p-3 text-right font-bold ${t.amount > 0 ? 'text-success' : 'text-danger'}`}>
-                                            {t.amount > 0 ? '+' : ''}₺{Number(t.amount).toFixed(2)}
+                                        <td className={`p-3 text-right font-bold ${isIncome(t) ? 'text-success' : 'text-danger'}`}>
+                                            {formatTransactionAmount(t)}
                                         </td>
                                     </tr>
                                 ))}
@@ -169,16 +130,6 @@ const Dashboard = () => {
                         </Link>
                     </div>
 
-                    <div className="mt-8 border-t border-border pt-6">
-                        <h3 className="text-sm font-medium text-secondary mb-3">Budget Status</h3>
-                        <div className="w-full bg-slate-700 rounded-full h-2.5 mb-1">
-                            <div className="bg-primary h-2.5 rounded-full" style={{ width: '45%' }}></div>
-                        </div>
-                        <div className="flex justify-between text-xs text-secondary">
-                            <span>Spent: ₺{stats.expense.toFixed(0)}</span>
-                            <span>Limit: ₺5,000</span>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>

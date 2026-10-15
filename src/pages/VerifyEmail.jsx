@@ -1,61 +1,64 @@
-import React, { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import axios from 'axios'; // Use raw axios to avoid interceptor redirects if needed, or api instance
+import React, { useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import api, { getApiError } from '../services/api';
 
 const VerifyEmail = () => {
     const [searchParams] = useSearchParams();
-    const [status, setStatus] = useState('verifying'); // verifying, success, error
+    const [status, setStatus] = useState('verifying');
     const [message, setMessage] = useState('');
-    const navigate = useNavigate();
+    const verification = useRef(null);
+    const userId = searchParams.get('userId');
+    const token = searchParams.get('token');
 
     useEffect(() => {
-        const userId = searchParams.get('userId');
-        const token = searchParams.get('token');
-
         if (!userId || !token) {
             setStatus('error');
             setMessage('Invalid verification link.');
             return;
         }
 
-        const verify = async () => {
-            try {
-                // We use the base URL from env directly or the api instance
-                const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-                await axios.get(`${apiUrl}/auth/verify-email`, {
-                    params: { userId, token }
-                });
-                setStatus('success');
-                setTimeout(() => navigate('/login'), 3000);
-            } catch (error) {
-                setStatus('error');
-                setMessage(error.response?.data?.message || 'Verification failed. Link might be expired.');
-            }
-        };
+        let active = true;
+        setStatus('verifying');
+        if (verification.current?.userId !== userId || verification.current?.token !== token) {
+            verification.current = {
+                userId,
+                token,
+                request: api.get('/auth/verify-email', { params: { userId, token } }),
+            };
+        }
 
-        verify();
-    }, [searchParams]);
+        verification.current.request.then(() => {
+            if (active) setStatus('success');
+        }).catch((error) => {
+            if (!active) return;
+            setStatus('error');
+            setMessage(getApiError(error, 'Verification failed. Link might be expired.'));
+        });
+
+        return () => { active = false; };
+    }, [userId, token]);
 
     return (
         <div className="flex items-center justify-center min-h-screen bg-body text-center">
             <div className="card max-w-md w-full p-8">
                 {status === 'verifying' && (
-                    <div>
+                    <div role="status">
                         <h2 className="text-xl font-bold mb-2">Verifying Email...</h2>
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
                     </div>
                 )}
                 {status === 'success' && (
-                    <div>
+                    <div role="status">
                         <h2 className="text-xl font-bold text-success mb-2">Email Verified!</h2>
-                        <p className="text-secondary">Redirecting to login...</p>
+                        <p className="text-secondary mb-4">You can now sign in to your account.</p>
+                        <Link to="/login" className="btn btn-primary">Go to Login</Link>
                     </div>
                 )}
                 {status === 'error' && (
-                    <div>
+                    <div role="alert">
                         <h2 className="text-xl font-bold text-danger mb-2">Verification Failed</h2>
                         <p className="text-secondary mb-4">{message}</p>
-                        <button onClick={() => navigate('/login')} className="btn btn-primary">Go to Login</button>
+                        <Link to="/login" className="btn btn-primary">Go to Login</Link>
                     </div>
                 )}
             </div>

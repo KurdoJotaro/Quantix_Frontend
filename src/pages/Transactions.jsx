@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import api from '../services/api';
+import api, { getApiError } from '../services/api';
+import { formatTransactionAmount, getLocalDate, isIncome } from '../services/transactions';
 import { Plus, Trash, Edit2 } from 'lucide-react';
 import Modal from '../components/Modal';
 
@@ -7,6 +8,7 @@ const Transactions = () => {
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [categoryError, setCategoryError] = useState('');
 
     // Modal & Form State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -14,10 +16,12 @@ const Transactions = () => {
     const [formData, setFormData] = useState({
         amount: '',
         description: '',
-        date: new Date().toISOString().split('T')[0],
+        date: getLocalDate(),
         categoryId: ''
     });
     const [editingId, setEditingId] = useState(null);
+    const [saving, setSaving] = useState(false);
+    const [formError, setFormError] = useState('');
 
     useEffect(() => {
         fetchTransactions();
@@ -29,9 +33,10 @@ const Transactions = () => {
             const response = await api.get('/transactions');
             if (response.data.success) {
                 setTransactions(response.data.data);
+                setError('');
             }
         } catch (err) {
-            setError('Failed to fetch transactions.');
+            setError(getApiError(err, 'Failed to fetch transactions.'));
         } finally {
             setLoading(false);
         }
@@ -44,15 +49,16 @@ const Transactions = () => {
                 setCategories(response.data.data);
             }
         } catch (err) {
-            console.error("Failed to fetch categories");
+            setCategoryError(getApiError(err, 'Failed to fetch categories.'));
         }
     };
 
     const handleOpenModal = (transaction = null) => {
+        setFormError('');
         if (transaction) {
             setEditingId(transaction.id);
             setFormData({
-                amount: transaction.amount,
+                amount: Math.abs(Number(transaction.amount)),
                 description: transaction.description || '',
                 date: transaction.date.split('T')[0],
                 categoryId: transaction.categoryId
@@ -62,7 +68,7 @@ const Transactions = () => {
             setFormData({
                 amount: '',
                 description: '',
-                date: new Date().toISOString().split('T')[0],
+                date: getLocalDate(),
                 categoryId: ''
             });
         }
@@ -76,16 +82,26 @@ const Transactions = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (saving) return;
+        setSaving(true);
+        setFormError('');
+        const payload = {
+            ...formData,
+            amount: Number(formData.amount),
+            categoryId: Number(formData.categoryId),
+        };
         try {
             if (editingId) {
-                await api.put(`/transactions/${editingId}`, formData);
+                await api.put(`/transactions/${editingId}`, payload);
             } else {
-                await api.post('/transactions', formData);
+                await api.post('/transactions', payload);
             }
-            fetchTransactions();
+            await fetchTransactions();
             handleCloseModal();
         } catch (err) {
-            alert(err.response?.data?.message || 'Operation failed.');
+            setFormError(getApiError(err));
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -93,9 +109,9 @@ const Transactions = () => {
         if (!window.confirm('Are you sure you want to delete this transaction?')) return;
         try {
             await api.delete(`/transactions/${id}`);
-            setTransactions(transactions.filter(t => t.id !== id));
+            setTransactions((current) => current.filter(transaction => transaction.id !== id));
         } catch (err) {
-            setError('Failed to delete transaction.');
+            setError(getApiError(err, 'Failed to delete transaction.'));
         }
     };
 
@@ -111,6 +127,7 @@ const Transactions = () => {
             </div>
 
             {error && <div className="text-error mb-4 bg-red-500/10 p-2 rounded">{error}</div>}
+            {categoryError && <div role="alert" className="text-error mb-4">{categoryError}</div>}
 
             <div className="card overflow-x-auto">
                 <table className="w-full text-left border-collapse">
@@ -131,12 +148,12 @@ const Transactions = () => {
                                 <td className="p-3">
                                     <span className="bg-bg-card-hover px-2 py-1 rounded text-xs text-nowrap">{t.categoryName}</span>
                                 </td>
-                                <td className={`p-3 text-right font-medium ${t.categoryName === 'Income' || t.amount > 0 ? 'text-success' : 'text-danger'}`}>
-                                    {t.categoryName === 'Income' || t.amount > 0 ? '+' : ''}₺{Number(t.amount).toFixed(2)}
+                                <td className={`p-3 text-right font-medium ${isIncome(t) ? 'text-success' : 'text-danger'}`}>
+                                    {formatTransactionAmount(t)}
                                 </td>
                                 <td className="p-3 flex justify-center gap-2">
-                                    <button onClick={() => handleOpenModal(t)} className="text-secondary hover:text-primary"><Edit2 size={16} /></button>
-                                    <button onClick={() => handleDelete(t.id)} className="text-secondary hover:text-danger"><Trash size={16} /></button>
+                                    <button onClick={() => handleOpenModal(t)} aria-label="Edit transaction" className="text-secondary hover:text-primary"><Edit2 size={16} /></button>
+                                    <button onClick={() => handleDelete(t.id)} aria-label="Delete transaction" className="text-secondary hover:text-danger"><Trash size={16} /></button>
                                 </td>
                             </tr>
                         ))}
@@ -155,6 +172,7 @@ const Transactions = () => {
                 title={editingId ? 'Edit Transaction' : 'New Transaction'}
             >
                 <form onSubmit={handleSubmit}>
+                    {formError && <div role="alert" className="text-error mb-4">{formError}</div>}
                     <div className="form-group">
                         <label className="form-label">Category</label>
                         <select
@@ -178,6 +196,7 @@ const Transactions = () => {
                         <input
                             type="number"
                             step="0.01"
+                            min="0.01"
                             className="form-input"
                             value={formData.amount}
                             onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
@@ -202,14 +221,15 @@ const Transactions = () => {
                             type="text"
                             className="form-input"
                             value={formData.description}
+                            maxLength={500}
                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                         />
                     </div>
 
                     <div className="flex gap-3 justify-end mt-6">
                         <button type="button" onClick={handleCloseModal} className="btn btn-secondary">Cancel</button>
-                        <button type="submit" className="btn btn-primary">
-                            {editingId ? 'Update' : 'Create'}
+                        <button type="submit" disabled={saving} className="btn btn-primary">
+                            {saving ? 'Saving...' : editingId ? 'Update' : 'Create'}
                         </button>
                     </div>
                 </form>

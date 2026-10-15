@@ -3,17 +3,21 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { getApiError } from '../services/api';
 
 const Login = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     const { login } = useAuth();
     const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (submitting) return;
+        setSubmitting(true);
         setError('');
         try {
             const success = await login(email, password);
@@ -23,7 +27,9 @@ const Login = () => {
                 setError('Login failed. Please check your credentials.');
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Login failed.');
+            setError(getApiError(err, 'Login failed.'));
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -33,7 +39,7 @@ const Login = () => {
                 <h2 className="text-2xl font-bold text-center mb-4">Welcome Back</h2>
                 <p className="text-center text-secondary mb-6">Sign in to continue to Quantix</p>
 
-                {error && <div className="text-error mb-4 bg-red-500/10 p-2 rounded">{error}</div>}
+                {error && <div role="alert" className="text-error mb-4 bg-red-500/10 p-2 rounded">{error}</div>}
 
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
@@ -59,6 +65,7 @@ const Login = () => {
                             />
                             <button
                                 type="button"
+                                aria-label={showPassword ? 'Hide password' : 'Show password'}
                                 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-secondary hover:text-primary transition-colors"
                                 onClick={() => setShowPassword(!showPassword)}
                             >
@@ -67,8 +74,8 @@ const Login = () => {
                         </div>
                     </div>
 
-                    <button type="submit" className="w-full btn btn-primary mt-4">
-                        Sign In
+                    <button type="submit" disabled={submitting} className="w-full btn btn-primary mt-4">
+                        {submitting ? 'Signing in...' : 'Sign In'}
                     </button>
                 </form>
 
